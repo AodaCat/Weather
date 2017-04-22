@@ -7,26 +7,32 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.os.AsyncTask;
+import android.graphics.Bitmap;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.gson.Gson;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 import cc.howlove.aodacat.weather.R;
+import cc.howlove.aodacat.weather.entity.WeatherDataEntity;
 import cc.howlove.aodacat.weather.location.LocationUtil;
+import cc.howlove.aodacat.weather.logutil.LogUtil;
+import cc.howlove.aodacat.weather.weatherutil.WeatherId2IconUtil;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.OkHttpClient;
@@ -34,6 +40,7 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
+    private static final String tag = "MainActivity";
     private static final String baseURL = "http://v.juhe.cn/weather/index";
     private static final String key = "3cc8677905eb4140df95344b6ca96762";
     private static final int CODE_SUCCESS = 1;
@@ -44,14 +51,22 @@ public class MainActivity extends AppCompatActivity {
     private ImageView ivCurrentLocation,ivWeather;
     private LocationUtil mLocationUtil;
     private OkHttpClient mOkHttpClient;
-
+    private SwipeRefreshLayout srfRefresh;
+    private Gson mGson;
     private Handler mHandler = new Handler(){
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what){
                 case CODE_SUCCESS:
-                    String result = (String) msg.obj;
-                    tvWeather.setText(result);
+                    WeatherDataEntity entity = (WeatherDataEntity) msg.obj;
+                    int id = entity.getResult().getToday().getWeather_id().getFa();
+                    Bitmap bitmap = WeatherId2IconUtil.getIcon(MainActivity.this,id);
+                    ivWeather.setImageBitmap(bitmap);
+                    ivWeather.setVisibility(View.VISIBLE);
+                    String text = "当前温度:"+entity.getResult().getSk().getTemp()+"℃\n"+entity.getResult().getToday().getWeather()+"\n当前风况"+
+                        entity.getResult().getSk().getWind_direction()+"  "+entity.getResult().getSk().getWind_strength();
+
+                    tvWeather.setText(text);
                     break;
                 case CODE_FAILED:
                     Toast.makeText(MainActivity.this,"拉取信息失败...",Toast.LENGTH_SHORT).show();
@@ -66,7 +81,9 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         mOkHttpClient = new OkHttpClient();
         mLocationUtil.getCurrentLocation();
+        mGson = new Gson();
         initViews();
+        setListeners();
         register();
         refreshWeather();
         //获取权限获取当前位置
@@ -117,7 +134,7 @@ public class MainActivity extends AppCompatActivity {
                 break;
         }
     }
-
+    //初始化控件，为控件设定句柄
     private void initViews(){
         btnSetting = (Button) findViewById(R.id.btn_setting);
         btnAdd = (Button) findViewById(R.id.btn_add);
@@ -125,12 +142,22 @@ public class MainActivity extends AppCompatActivity {
         ivCurrentLocation = (ImageView) findViewById(R.id.iv_current_location);
         tvWeather = (TextView) findViewById(R.id.tv_weather);
         ivWeather = (ImageView) findViewById(R.id.iv_weather);
+        srfRefresh = (SwipeRefreshLayout) findViewById(R.id.srf_refresh);
         if (getCurrentLocationFromRecord()){
             ivCurrentLocation.setVisibility(View.VISIBLE);
         }
         tvLocation.setText(currentLocation);
     }
-
+    //绑定控件事件
+    private void setListeners(){
+        srfRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                mLocationUtil.getCurrentLocation();
+            }
+        });
+    }
+    //注册广播
     private void register() {
         IntentFilter filter = new IntentFilter();
         filter.addAction(LocationUtil.ACTION_GET_CURRENT_LOCATION);
@@ -152,6 +179,9 @@ public class MainActivity extends AppCompatActivity {
             if (action.equals(LocationUtil.ACTION_GET_CURRENT_LOCATION)){
                 int code = intent.getIntExtra(LocationUtil.EXTRA_CURRENT_LOCATION_RESULT_CODE,LocationUtil.EXTRA_CURRENT_LOCATION_FAILED);
                 if (code == LocationUtil.EXTRA_CURRENT_LOCATION_SUCCESS){
+                    if (srfRefresh.isRefreshing()){
+                        srfRefresh.setRefreshing(false);
+                    }
                     currentLocation = intent.getStringExtra(LocationUtil.EXTRA_CURRENT_LOCATION);
                     tvLocation.setText(currentLocation);
                     refreshWeather();
@@ -176,9 +206,11 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 String result = response.body().string();
+                WeatherDataEntity entity = mGson.fromJson(result,WeatherDataEntity.class);
+                LogUtil.v(tag,entity.toString());
                 Message message = Message.obtain();
                 message.what = CODE_SUCCESS;
-                message.obj = result;
+                message.obj = entity;
                 mHandler.sendMessage(message);
             }
         });

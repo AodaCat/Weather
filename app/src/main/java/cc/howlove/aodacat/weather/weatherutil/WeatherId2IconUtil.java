@@ -20,12 +20,11 @@ public class WeatherId2IconUtil {
     private static int w_53 = R.mipmap.w53;
     private static int w_unknow = R.mipmap.wunknow;
 
-    public Bitmap getIcon(Context context,String id){
-        int index = Integer.getInteger(id);
+    public static Bitmap getIcon(Context context,int id){
         Bitmap bitmap = null;
-        if (index >= 0 && index <= 31){
-            bitmap = BitmapFactory.decodeResource(context.getResources(),weatherIconId[index]);
-        }else if (id.equals("53")){
+        if (id >= 0 && id <= 31){
+            bitmap = BitmapFactory.decodeResource(context.getResources(),weatherIconId[id]);
+        }else if (id == 53){
             bitmap = BitmapFactory.decodeResource(context.getResources(),w_53);
         }else {
             bitmap = BitmapFactory.decodeResource(context.getResources(),w_unknow);
