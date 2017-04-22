@@ -7,7 +7,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -16,6 +15,8 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -26,13 +27,17 @@ import com.google.gson.Gson;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import cc.howlove.aodacat.weather.R;
+import cc.howlove.aodacat.weather.adapter.WeatherAdapter;
+import cc.howlove.aodacat.weather.entity.FutureWeather;
 import cc.howlove.aodacat.weather.entity.WeatherDataEntity;
 import cc.howlove.aodacat.weather.location.LocationUtil;
 import cc.howlove.aodacat.weather.logutil.LogUtil;
-import cc.howlove.aodacat.weather.weatherutil.WeatherId2IconUtil;
+import cc.howlove.aodacat.weather.sqlite.WeatherDataUtil;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.OkHttpClient;
@@ -45,30 +50,34 @@ public class MainActivity extends AppCompatActivity {
     private static final String key = "3cc8677905eb4140df95344b6ca96762";
     private static final int CODE_SUCCESS = 1;
     private static final int CODE_FAILED = 0;
+    private static final int CODE_NO_DATA = 2;
     private String currentLocation;
     private Button btnSetting,btnAdd;
-    private TextView tvLocation,tvWeather;
-    private ImageView ivCurrentLocation,ivWeather;
+    private TextView tvLocation;
+    private ImageView ivCurrentLocation;
     private LocationUtil mLocationUtil;
     private OkHttpClient mOkHttpClient;
     private SwipeRefreshLayout srfRefresh;
     private Gson mGson;
+    private RecyclerView rvFutureWeather;
+    private WeatherAdapter mWeatherAdapter;
+    private List<FutureWeather> futureWeathers;
+    private WeatherDataUtil mWeatherDataUtil;
     private Handler mHandler = new Handler(){
         @Override
         public void handleMessage(Message msg) {
+            if (srfRefresh.isRefreshing()){
+                srfRefresh.setRefreshing(false);
+            }
             switch (msg.what){
                 case CODE_SUCCESS:
-                    WeatherDataEntity entity = (WeatherDataEntity) msg.obj;
-                    int id = entity.getResult().getToday().getWeather_id().getFa();
-                    Bitmap bitmap = WeatherId2IconUtil.getIcon(MainActivity.this,id);
-                    ivWeather.setImageBitmap(bitmap);
-                    ivWeather.setVisibility(View.VISIBLE);
-                    String text = "当前温度:"+entity.getResult().getSk().getTemp()+"℃\n"+entity.getResult().getToday().getWeather()+"\n当前风况"+
-                        entity.getResult().getSk().getWind_direction()+"  "+entity.getResult().getSk().getWind_strength();
-
-                    tvWeather.setText(text);
+                    mWeatherAdapter.notifyDataSetChanged();
                     break;
                 case CODE_FAILED:
+                    Toast.makeText(MainActivity.this,"更新失败",Toast.LENGTH_SHORT).show();
+                    mWeatherAdapter.notifyDataSetChanged();
+                    break;
+                case CODE_NO_DATA:
                     Toast.makeText(MainActivity.this,"拉取信息失败...",Toast.LENGTH_SHORT).show();
                     break;
             }
@@ -79,14 +88,22 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         mLocationUtil = new LocationUtil(MainActivity.this);
         setContentView(R.layout.activity_main);
-        mOkHttpClient = new OkHttpClient();
+        mOkHttpClient = new OkHttpClient.Builder()
+                            .readTimeout(30, TimeUnit.SECONDS)
+                            .writeTimeout(30,TimeUnit.SECONDS)
+                            .connectTimeout(10,TimeUnit.SECONDS)
+                            .build();
         mLocationUtil.getCurrentLocation();
         mGson = new Gson();
+        mWeatherDataUtil = new WeatherDataUtil(MainActivity.this,"weather.db");
+        futureWeathers = new ArrayList<>();
+        mWeatherAdapter = new WeatherAdapter(futureWeathers,MainActivity.this);
         initViews();
         setListeners();
         register();
-        refreshWeather();
+//        refreshWeather();
         //获取权限获取当前位置
+        getWeatherDataFromRecord();
         getCurrentLocation();
 
     }
@@ -110,6 +127,13 @@ public class MainActivity extends AppCompatActivity {
         }else {
             mLocationUtil.getCurrentLocation();
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unregisterReceiver(receiver);
+        mWeatherDataUtil.closeDatabase();
     }
 
     @Override
@@ -140,9 +164,8 @@ public class MainActivity extends AppCompatActivity {
         btnAdd = (Button) findViewById(R.id.btn_add);
         tvLocation = (TextView) findViewById(R.id.tv_location);
         ivCurrentLocation = (ImageView) findViewById(R.id.iv_current_location);
-        tvWeather = (TextView) findViewById(R.id.tv_weather);
-        ivWeather = (ImageView) findViewById(R.id.iv_weather);
         srfRefresh = (SwipeRefreshLayout) findViewById(R.id.srf_refresh);
+        rvFutureWeather = (RecyclerView) findViewById(R.id.rv_future_weather);
         if (getCurrentLocationFromRecord()){
             ivCurrentLocation.setVisibility(View.VISIBLE);
         }
@@ -154,8 +177,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onRefresh() {
                 mLocationUtil.getCurrentLocation();
+                refreshWeather();
             }
         });
+        RecyclerView.LayoutManager layoutManager = new LinearLayoutManager(MainActivity.this);
+        rvFutureWeather.setLayoutManager(layoutManager);
+        rvFutureWeather.setAdapter(mWeatherAdapter);
     }
     //注册广播
     private void register() {
@@ -179,11 +206,13 @@ public class MainActivity extends AppCompatActivity {
             if (action.equals(LocationUtil.ACTION_GET_CURRENT_LOCATION)){
                 int code = intent.getIntExtra(LocationUtil.EXTRA_CURRENT_LOCATION_RESULT_CODE,LocationUtil.EXTRA_CURRENT_LOCATION_FAILED);
                 if (code == LocationUtil.EXTRA_CURRENT_LOCATION_SUCCESS){
-                    if (srfRefresh.isRefreshing()){
-                        srfRefresh.setRefreshing(false);
-                    }
                     currentLocation = intent.getStringExtra(LocationUtil.EXTRA_CURRENT_LOCATION);
                     tvLocation.setText(currentLocation);
+                    refreshWeather();
+                }else if (code == LocationUtil.EXTRA_CURRENT_LOCATION_FAILED){
+                    if (getCurrentLocationFromRecord()){
+                        ivCurrentLocation.setVisibility(View.VISIBLE);
+                    }
                     refreshWeather();
                 }
             }
@@ -198,8 +227,19 @@ public class MainActivity extends AppCompatActivity {
         call.enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
                 Message message = Message.obtain();
+                WeatherDataEntity entity = mWeatherDataUtil.getWeatherData(currentLocation);
+                if (entity == null){
+                    message.what = CODE_NO_DATA;
+                    mHandler.sendMessage(message);
+                    return;
+                }
                 message.what = CODE_FAILED;
+                mWeatherAdapter.setTodayWeather(entity.getResult().getToday());
+                futureWeathers.clear();
+                futureWeathers.addAll(Arrays.asList(entity.getResult().getFuture()));
+                message.obj = entity;
                 mHandler.sendMessage(message);
             }
 
@@ -207,12 +247,29 @@ public class MainActivity extends AppCompatActivity {
             public void onResponse(Call call, Response response) throws IOException {
                 String result = response.body().string();
                 WeatherDataEntity entity = mGson.fromJson(result,WeatherDataEntity.class);
+                LogUtil.v(tag,entity.getReason());
+                mWeatherAdapter.setTodayWeather(entity.getResult().getToday());
+                futureWeathers.clear();
+                futureWeathers.addAll(Arrays.asList(entity.getResult().getFuture()));
                 LogUtil.v(tag,entity.toString());
                 Message message = Message.obtain();
                 message.what = CODE_SUCCESS;
                 message.obj = entity;
                 mHandler.sendMessage(message);
+                mWeatherDataUtil.addWeatherData(entity);
+
             }
         });
+    }
+    private void getWeatherDataFromRecord(){
+        WeatherDataEntity entity = mWeatherDataUtil.getWeatherData(currentLocation);
+        if (entity == null){
+            Toast.makeText(MainActivity.this,"拉取数据失败..",Toast.LENGTH_SHORT).show();
+            return;
+        }
+        mWeatherAdapter.setTodayWeather(entity.getResult().getToday());
+        futureWeathers.clear();
+        futureWeathers.addAll(Arrays.asList(entity.getResult().getFuture()));
+        mWeatherAdapter.notifyDataSetChanged();
     }
 }
