@@ -67,19 +67,9 @@ public class LocationUtil {
         @Override
         public void onReceiveLocation(BDLocation bdLocation) {
             mLocationClient.stop();//定位一次就够了
-            String location = "";
-            location = bdLocation.getCity();
-            LogUtil.v(tag,location);
             Intent intent = new Intent(ACTION_GET_CURRENT_LOCATION);
-            if (TextUtils.isEmpty(location)){
-                intent.putExtra(EXTRA_CURRENT_LOCATION_RESULT_CODE,EXTRA_CURRENT_LOCATION_FAILED);
-            }else {
-                intent.putExtra(EXTRA_CURRENT_LOCATION_RESULT_CODE,EXTRA_CURRENT_LOCATION_SUCCESS);
-                intent.putExtra(EXTRA_CURRENT_LOCATION,location);
-                SharedPreferences.Editor editor = mContext.getSharedPreferences("locations",Context.MODE_PRIVATE).edit();
-                editor.putString("current_location",location);
-                editor.apply();
-            }
+            intent.putExtra(EXTRA_CURRENT_LOCATION_RESULT_CODE,EXTRA_CURRENT_LOCATION_SUCCESS);
+            intent.putExtra(EXTRA_CURRENT_LOCATION,bdLocation);
             mContext.sendBroadcast(intent);
         }
 

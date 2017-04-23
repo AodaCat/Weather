@@ -6,14 +6,9 @@
     android:orientation="vertical"
     tools:context="cc.howlove.aodacat.weather.activity.MainActivity">
     <include layout="@layout/topbar"/>
-    <android.support.v4.widget.SwipeRefreshLayout
-        android:id="@+id/srf_refresh"
+    <android.support.v4.view.ViewPager
+        android:id="@+id/vp_contents"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
-        <android.support.v7.widget.RecyclerView
-            android:id="@+id/rv_future_weather"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"></android.support.v7.widget.RecyclerView>
-    </android.support.v4.widget.SwipeRefreshLayout>
-
+    </android.support.v4.view.ViewPager>
 </LinearLayout>

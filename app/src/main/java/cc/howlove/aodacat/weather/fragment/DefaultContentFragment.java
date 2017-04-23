@@ -1,14 +1,20 @@
 package cc.howlove.aodacat.weather.fragment;
 
+import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
+import android.support.v4.content.ContextCompat;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -17,6 +23,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import com.baidu.location.BDLocation;
 import com.google.gson.Gson;
 
 import java.io.IOException;
@@ -40,20 +47,23 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 /**
+ * 与其他ContentFragment布局相同，但是这个Fragment是程序的默认视图，所以它需要进行运行时权限的处理
  * Created by anymore on 17-4-22.
  */
 
-public class ContentFragment extends Fragment{
-    private static final String tag = "ContentFragment";
-    public String cityname;
+public class DefaultContentFragment extends Fragment{
+    private static final String tag = "DefaultContentFragment";
     private SwipeRefreshLayout srlRefresh;
     private RecyclerView rvWeatherDatas;
+    private LocationUtil mLocationUtil;
     private OkHttpClient mOkHttpClient;
     private Gson mGson;
     private WeatherDataUtil mWeatherDataUtil;
-    private MainActivity mMainActivity;
-    private List<FutureWeather> futureWeathers;
     private WeatherAdapter mWeatherAdapter;
+    private List<FutureWeather> futureWeathers;
+    private BDLocation mBdLocation;
+    public String currentCityName;
+    private MainActivity mMainActivity;
     private Handler mHandler = new Handler(){
         @Override
         public void handleMessage(Message msg) {
@@ -74,17 +84,11 @@ public class ContentFragment extends Fragment{
             }
         }
     };
-    public static ContentFragment newInstance(String cityname){
-        ContentFragment fragment = new ContentFragment();
-        Bundle bundle = new Bundle();
-        bundle.putString("cityname",cityname);
-        fragment.setArguments(bundle);
-        return fragment;
-    }
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         mMainActivity = (MainActivity) getActivity();
+        mLocationUtil = new LocationUtil(getContext());
         mOkHttpClient = new OkHttpClient.Builder()
                 .readTimeout(10, TimeUnit.SECONDS)
                 .writeTimeout(10,TimeUnit.SECONDS)
@@ -93,6 +97,7 @@ public class ContentFragment extends Fragment{
         mGson = new Gson();
         mWeatherDataUtil = new WeatherDataUtil(getContext(),"weather.db");
         futureWeathers = new ArrayList<>();
+        getCurrentLocationFromRecord();
     }
 
     @Nullable
@@ -101,8 +106,6 @@ public class ContentFragment extends Fragment{
         View defaultContentView = inflater.inflate(R.layout.content_layout,container,false);
         srlRefresh = (SwipeRefreshLayout) defaultContentView.findViewById(R.id.srl_refresh);
         rvWeatherDatas = (RecyclerView) defaultContentView.findViewById(R.id.rv_weather_datas);
-        Bundle bundle = getArguments();
-        cityname = bundle.getString("cityname");
         return defaultContentView;
     }
 
@@ -110,8 +113,18 @@ public class ContentFragment extends Fragment{
     public void onStart() {
         super.onStart();
         setListeners();
+        getCurrentLocation();
+        register();
         refreshWeather();
     }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        getActivity().unregisterReceiver(receiver);
+        mWeatherDataUtil.closeDatabase();
+    }
+
     private void setListeners(){
         srlRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
@@ -124,8 +137,65 @@ public class ContentFragment extends Fragment{
         rvWeatherDatas.setLayoutManager(layoutManager);
         rvWeatherDatas.setAdapter(mWeatherAdapter);
     }
+    //注册广播
+    private void register() {
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(LocationUtil.ACTION_GET_CURRENT_LOCATION);
+        getActivity().registerReceiver(receiver,filter);
+    }
+    private void getCurrentLocation(){
+        List<String> permissionList = new ArrayList<>();
+        if (ContextCompat.checkSelfPermission(getContext(),
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED){
+            permissionList.add(Manifest.permission.ACCESS_FINE_LOCATION);
+        }
+        if (ContextCompat.checkSelfPermission(getContext(),
+                Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED){
+            permissionList.add(Manifest.permission.READ_PHONE_STATE);
+        }
+        if (ContextCompat.checkSelfPermission(getContext(),
+                Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED){
+            permissionList.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        }
+        if (!permissionList.isEmpty()){
+            String[] permissions = permissionList.toArray(new String[permissionList.size()]);
+            requestPermissions(permissions,1);//碎片的运行时权限请求
+        }else {
+            mLocationUtil.getCurrentLocation();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        switch (requestCode){
+            case 1:
+                if (grantResults.length > 0){
+                    for (int result : grantResults) {
+                        if (result != PackageManager.PERMISSION_GRANTED){
+                            Toast.makeText(getContext(),"您必须同意所有权限，程序才能正常使用..",Toast.LENGTH_SHORT).show();
+                            getActivity().finish();
+                            return;
+                        }
+                    }
+                    mLocationUtil.getCurrentLocation();
+                }else {
+                    Toast.makeText(getContext(),"发生未知错位，程序异常退出..",Toast.LENGTH_SHORT).show();
+                    getActivity().finish();
+                }
+                break;
+            default:
+                break;
+        }
+    }
     private void refreshWeather(){
-        String url = MainActivity.baseURL1+"?format=2&dtype=json&cityname="+cityname+"&key="+MainActivity.key;
+        String url = null;
+        if (mBdLocation != null){
+            url = MainActivity.baseURL2+"?format=2&dtype=json&key="
+                    +MainActivity.key+"&lon="+mBdLocation.getLongitude()+"&lat="+mBdLocation.getLatitude();
+        }else {
+            url = MainActivity.baseURL1+"?format=2&dtype=json&cityname="+currentCityName+"&key="+MainActivity.key;
+        }
         final Request request = new Request.Builder()
                 .url(url)
                 .build();
@@ -172,5 +242,29 @@ public class ContentFragment extends Fragment{
             }
         });
     }
-
+    private BroadcastReceiver receiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (action.equals(LocationUtil.ACTION_GET_CURRENT_LOCATION)){
+                int code = intent.getIntExtra(LocationUtil.EXTRA_CURRENT_LOCATION_RESULT_CODE,LocationUtil.EXTRA_CURRENT_LOCATION_FAILED);
+                if (code == LocationUtil.EXTRA_CURRENT_LOCATION_SUCCESS){
+                    mBdLocation = intent.getParcelableExtra(LocationUtil.EXTRA_CURRENT_LOCATION);
+                    currentCityName = mBdLocation.getDistrict();
+                    mMainActivity.tvLocation.setText(currentCityName);
+                    SharedPreferences.Editor editor = getContext().getSharedPreferences("locations",Context.MODE_PRIVATE).edit();
+                    editor.putString("current_location",currentCityName);
+                    editor.apply();
+                    refreshWeather();
+                }
+            }
+        }
+    };
+    public void getCurrentLocationFromRecord() {
+        SharedPreferences sharedPreferences = getContext().getSharedPreferences("locations",Context.MODE_PRIVATE);
+        currentCityName = sharedPreferences.getString("current_location","这是我瞎掰的一句话");
+        if (currentCityName.equals("这是我瞎掰的一句话")){
+            currentCityName = "信阳";
+        }
+    }
 }

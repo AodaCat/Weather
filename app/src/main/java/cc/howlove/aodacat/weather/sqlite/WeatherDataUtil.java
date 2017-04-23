@@ -4,6 +4,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.text.TextUtils;
 
 import com.google.gson.Gson;
 
@@ -30,6 +31,9 @@ public class WeatherDataUtil {
     }
     public void addWeatherData(WeatherDataEntity entity){
         String cityname = entity.getResult().getToday().getCity();
+        addWeatherData(entity,cityname);
+    }
+    public void addWeatherData(WeatherDataEntity entity,String cityname){
         String weatherdata = mGson.toJson(entity);
         LogUtil.v(tag,weatherdata);
         ContentValues values = new ContentValues();
@@ -43,12 +47,10 @@ public class WeatherDataUtil {
             LogUtil.v(tag,"存在此城市数据,更新成功");
         }
     }
-    public void addWeatherDatas(List<WeatherDataEntity> entities){
-        for (WeatherDataEntity entity : entities) {
-            addWeatherData(entity);
-        }
-    }
     public WeatherDataEntity getWeatherData(String cityname){
+        if (TextUtils.isEmpty(cityname)){
+            return null;
+        }
         if (cityname.length()>2){
             cityname = cityname.substring(0,1);
         }
