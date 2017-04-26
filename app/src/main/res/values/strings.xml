@@ -2,4 +2,5 @@
     <string name="app_name">Weather</string>
     <string name="text_Anymore">Anymore test!</string>
     <string name="text_AodaCat">AodaCat test!</string>
+    <string name="my_location">位置</string>
 </resources>

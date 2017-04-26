@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <android.support.v4.widget.DrawerLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns="http://schemas.android.com/apk/res-auto"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -24,13 +24,13 @@
                 </android.support.v7.widget.RecyclerView>
             </android.support.v4.widget.SwipeRefreshLayout>
     </LinearLayout>
-    <TextView
+    <android.support.design.widget.NavigationView
+        android:id="@+id/setting_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_gravity="start"
-        android:text="@string/text_AodaCat"
-        android:textSize="30sp"
-        android:background="#FFF"/>
+        app:menu="@menu/setting_menu"
+        app:headerLayout="@layout/setting_header"/>
 </android.support.v4.widget.DrawerLayout>
 
 
