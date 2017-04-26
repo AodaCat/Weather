@@ -13,6 +13,8 @@ import android.os.Message;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.view.GravityCompat;
+import android.support.v4.widget.DrawerLayout;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
@@ -53,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int CODE_NO_DATA = 2;
     private String currentLocation;
     private Button btnSetting,btnAdd;
+    private DrawerLayout mDrawerLayout;     // 左滑动
     private TextView tvLocation;
     private ImageView ivCurrentLocation;
     private LocationUtil mLocationUtil;
@@ -105,6 +108,15 @@ public class MainActivity extends AppCompatActivity {
         //获取权限获取当前位置
         getWeatherDataFromRecord();
         getCurrentLocation();
+
+        mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
+        btnSetting = (Button) findViewById(R.id.btn_setting);
+        btnSetting.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mDrawerLayout.openDrawer(GravityCompat.START);
+            }
+        });
 
     }
     private void getCurrentLocation(){
@@ -272,4 +284,5 @@ public class MainActivity extends AppCompatActivity {
         futureWeathers.addAll(Arrays.asList(entity.getResult().getFuture()));
         mWeatherAdapter.notifyDataSetChanged();
     }
+
 }
