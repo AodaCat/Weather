@@ -1,8 +1,10 @@
 package cc.howlove.aodacat.weather.activity;
 
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Message;
+import android.preference.PreferenceManager;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.ContextCompat;
@@ -21,6 +23,14 @@ import com.facebook.stetho.inspector.elements.ShadowDocument;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.io.IOException;
+
+import com.bumptech.glide.Glide;
+
+import cc.howlove.aodacat.weather.http.HttpUtil;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.Response;
 
 import android.Manifest;
 
@@ -50,6 +60,7 @@ public class LocationActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_location);
 
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         bingPicImg = (ImageView) findViewById(R.id.bing_pic_img);
         String bingPic = prefs.getString("bing_pic", null);
         if (bingPic != null){
@@ -159,13 +170,13 @@ public class LocationActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 final String bingPic = response.body().string();
-                SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this).edit();
+                SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(LocationActivity.this).edit();
                 editor.putString("bing_pic", bingPic);
                 editor.apply();
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        Glide.with(WeatherActivity.this).load(bingPic).into(bingPicImg);
+                        Glide.with(LocationActivity.this).load(bingPic).into(bingPicImg);
                     }
                 });
             }
@@ -175,4 +186,5 @@ public class LocationActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
         });
+    }
 }
