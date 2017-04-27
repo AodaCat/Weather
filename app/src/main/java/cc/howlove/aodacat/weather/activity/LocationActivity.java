@@ -8,12 +8,15 @@ import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.baidu.location.BDLocation;
 import com.baidu.location.BDLocationListener;
 import com.baidu.location.LocationClient;
+import com.baidu.location.LocationClientOption;
 import com.facebook.stetho.inspector.elements.ShadowDocument;
 
 import java.util.ArrayList;
@@ -26,6 +29,7 @@ import cc.howlove.aodacat.weather.R;
 public class LocationActivity extends AppCompatActivity {
 
     private TextView positionText;
+    private ImageView bingPicImg;       //背景图片
     private static final int UPDATE_TEXT = 1;
     private Handler handler = new Handler(){
         public void handleMessage(Message msg){
@@ -46,6 +50,13 @@ public class LocationActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_location);
 
+        bingPicImg = (ImageView) findViewById(R.id.bing_pic_img);
+        String bingPic = prefs.getString("bing_pic", null);
+        if (bingPic != null){
+            Glide.with(this).load(bingPic).into(bingPicImg);
+        } else {
+            loadBingPic();
+        }
         mLocationClient = new LocationClient(getApplicationContext());
         mLocationClient.registerLocationListener(new MyLocationListener());
         List<String> permissionList = new ArrayList<>();
@@ -72,8 +83,23 @@ public class LocationActivity extends AppCompatActivity {
     }
 
     private void requestLocation() {
+        initLocation();
         mLocationClient.start();
     }
+
+    private void initLocation() {
+        LocationClientOption option = new LocationClientOption();
+        option.setScanSpan(5000);
+        option.setIsNeedAddress(true);
+        mLocationClient.setLocOption(option);
+    }
+
+    @Override
+    protected void onDestroy(){
+        super.onDestroy();
+        mLocationClient.stop();
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         switch (requestCode){
@@ -104,6 +130,11 @@ public class LocationActivity extends AppCompatActivity {
             StringBuilder currentPosition = new StringBuilder();
             currentPosition.append("纬度：").append(location.getLatitude()).append("\n");
             currentPosition.append("经度：").append(location.getLongitude()).append("\n");
+            currentPosition.append("国家：").append(location.getCountry()).append("\n");
+            currentPosition.append("省：").append(location.getProvince()).append("\n");
+            currentPosition.append("市").append(location.getCity()).append("\n");
+            currentPosition.append("县(区)：").append(location.getDistrict()).append("\n");
+            currentPosition.append("村(街道)：").append(location.getStreet()).append("\n");
             currentPosition.append("定位方式：");
             if (location.getLocType() == BDLocation.TypeGpsLocation){
                 currentPosition.append("GPS");
@@ -121,4 +152,27 @@ public class LocationActivity extends AppCompatActivity {
 
         }
     }
+
+    private void loadBingPic() {
+        String requestBingPic = "http://guolin.tech/api/bing_pic";
+        HttpUtil.sendOkHttpRequest(requestBingPic, new Callback() {
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                final String bingPic = response.body().string();
+                SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this).edit();
+                editor.putString("bing_pic", bingPic);
+                editor.apply();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Glide.with(WeatherActivity.this).load(bingPic).into(bingPicImg);
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(Call call, IOException e) {
+                e.printStackTrace();
+            }
+        });
 }
