@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.NonNull;
+import android.support.design.widget.NavigationView;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.view.GravityCompat;
@@ -19,6 +20,7 @@ import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -56,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private String currentLocation;
     private Button btnSetting,btnAdd;
     private DrawerLayout mDrawerLayout;     // 左滑动
+    private NavigationView navView;         // 设置菜单项的点击事件
     private TextView tvLocation;
     private ImageView ivCurrentLocation;
     private LocationUtil mLocationUtil;
@@ -91,6 +94,20 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         mLocationUtil = new LocationUtil(MainActivity.this);
         setContentView(R.layout.activity_main);
+        navView = (NavigationView) findViewById(R.id.setting_view);
+        navView.setNavigationItemSelectedListener(new NavigationView.OnNavigationItemSelectedListener() {
+            @Override
+            public boolean onNavigationItemSelected(@NonNull MenuItem item) {
+                Intent intent;
+                if (item.getItemId() == R.id.setting_location) {
+                    intent = new Intent(MainActivity.this, LocationActivity.class);
+                } else {
+                    return false;
+                }
+                startActivity(intent);
+                return true;
+            }
+        });
         mOkHttpClient = new OkHttpClient.Builder()
                             .readTimeout(30, TimeUnit.SECONDS)
                             .writeTimeout(30,TimeUnit.SECONDS)
