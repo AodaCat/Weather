@@ -51,7 +51,7 @@ import okhttp3.Response;
 public class MainActivity extends AppCompatActivity {
     private static final String tag = "MainActivity";
     private static final String baseURL = "http://v.juhe.cn/weather/index";
-    private static final String key = "3cc8677905eb4140df95344b6ca96762";
+    private static final String key = "031d757383029d3a9c4b34a8f930e6f4";
     private static final int CODE_SUCCESS = 1;
     private static final int CODE_FAILED = 0;
     private static final int CODE_NO_DATA = 2;

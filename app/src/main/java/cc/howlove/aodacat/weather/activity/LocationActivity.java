@@ -6,11 +6,10 @@ import android.os.Handler;
 import android.os.Message;
 import android.preference.PreferenceManager;
 import android.support.v4.app.ActivityCompat;
-import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.widget.ImageButton;
+import android.util.Log;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -19,7 +18,6 @@ import com.baidu.location.BDLocation;
 import com.baidu.location.BDLocationListener;
 import com.baidu.location.LocationClient;
 import com.baidu.location.LocationClientOption;
-import com.facebook.stetho.inspector.elements.ShadowDocument;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,6 +44,7 @@ public class LocationActivity extends AppCompatActivity {
             switch (msg.what){
                 case UPDATE_TEXT:
                     positionText.setText(msg.obj.toString());
+//                    Log.d("123", "测试2");
                     break;
                 default:
                     break;
@@ -58,6 +57,8 @@ public class LocationActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mLocationClient = new LocationClient(getApplicationContext());
+        mLocationClient.registerLocationListener(new MyLocationListener());
         setContentView(R.layout.activity_location);
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
@@ -68,8 +69,7 @@ public class LocationActivity extends AppCompatActivity {
         } else {
             loadBingPic();
         }
-        mLocationClient = new LocationClient(getApplicationContext());
-        mLocationClient.registerLocationListener(new MyLocationListener());
+
         List<String> permissionList = new ArrayList<>();
         positionText = (TextView) findViewById(R.id.position_text_view);
         if (ContextCompat.checkSelfPermission(LocationActivity.this,
@@ -100,11 +100,15 @@ public class LocationActivity extends AppCompatActivity {
 
     private void initLocation() {
         LocationClientOption option = new LocationClientOption();
-        option.setScanSpan(5000);
+    //    option.setScanSpan(2000);
         option.setIsNeedAddress(true);
         mLocationClient.setLocOption(option);
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+    }
     @Override
     protected void onDestroy(){
         super.onDestroy();
@@ -143,7 +147,7 @@ public class LocationActivity extends AppCompatActivity {
             currentPosition.append("经度：").append(location.getLongitude()).append("\n");
             currentPosition.append("国家：").append(location.getCountry()).append("\n");
             currentPosition.append("省：").append(location.getProvince()).append("\n");
-            currentPosition.append("市").append(location.getCity()).append("\n");
+            currentPosition.append("市：").append(location.getCity()).append("\n");
             currentPosition.append("县(区)：").append(location.getDistrict()).append("\n");
             currentPosition.append("村(街道)：").append(location.getStreet()).append("\n");
             currentPosition.append("定位方式：");
@@ -156,6 +160,7 @@ public class LocationActivity extends AppCompatActivity {
             message.what = UPDATE_TEXT;
             message.obj = currentPosition;
             handler.sendMessage(message);
+    //        Log.d("123", currentPosition.toString());
         }
 
         @Override
